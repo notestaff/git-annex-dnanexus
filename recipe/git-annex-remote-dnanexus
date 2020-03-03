@@ -1,0 +1,63 @@
+#!/bin/bash
+
+set -e -o pipefail -x
+
+STARTING_DIR=$(pwd)
+
+# way to get the absolute path to this script that should
+# work regardless of whether or not this script has been sourced
+# Find original directory of bash script, resovling symlinks
+# http://stackoverflow.com/questions/59895/can-a-bash-script-tell-what-directory-its-stored-in/246128#246128
+function absolute_path() {
+    local SOURCE="$1"
+    while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+        DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            SOURCE="$(readlink "$SOURCE")"
+        else
+            SOURCE="$(readlink -f "$SOURCE")"
+        fi
+        [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+    done
+    echo "$SOURCE"
+}
+SOURCE="${BASH_SOURCE[0]}"
+SCRIPT=$(absolute_path "$SOURCE")
+SCRIPT_DIRNAME="$(dirname "$SOURCE")"
+SCRIPTPATH="$(cd -P "$(echo $SCRIPT_DIRNAME)" &> /dev/null && pwd)"
+SCRIPT="$SCRIPTPATH/$(basename "$SCRIPT")"
+SCRIPTPATH_RESOLVED="$(readlink -f "$SCRIPT")"
+SCRIPTPATH_RESOLVED_DIR="$(dirname ${SCRIPTPATH_RESOLVED})"
+
+PKG=$(basename "$SCRIPT")
+
+SCRIPTPATH_RESOLVED_ENV_DEF="${SCRIPTPATH_RESOLVED_DIR}/$PKG.txt"
+
+PKG_DIR_NAME=$(basename ${SCRIPTPATH_RESOLVED_DIR})
+ENV_DEF_MD5=$(md5sum ${SCRIPTPATH_RESOLVED_ENV_DEF} | awk '{print $1;}')
+PRIVATE_ENV_NAME="${PKG_DIR_NAME}-env-${ENV_DEF_MD5}"
+
+#echo "SCRIPTPATH is ${SCRIPTPATH}"
+#echo "SCRIPTABSPATH is ${SCRIPTPATH_RESOLVED_DIR}"
+CONDA_PROFILE_SH="$(dirname $(dirname ${CONDA_EXE}))/etc/profile.d/conda.sh"
+. "${CONDA_PROFILE_SH}"
+
+LOCKFILE_BEG="${SCRIPTPATH_RESOLVED_DIR}/$PKG.env-create-beg.lock"
+LOCKFILE_END="${SCRIPTPATH_RESOLVED_DIR}/$PKG.env-create-end.lock"
+
+LOCKFILE="${SCRIPTPATH_RESOLVED_DIR}/${PRIVATE_ENV_NAME}.lock"
+
+(
+    flock -s 200
+    
+    (conda list -n ${PRIVATE_ENV_NAME} >& /dev/null) || \
+	conda create --override-channels -c conda-forge -c bioconda -c defaults -n ${PRIVATE_ENV_NAME} \
+	      --file ${SCRIPTPATH_RESOLVED_ENV_DEF} -y >& /dev/null
+
+ ) 200>"${LOCKFILE}"
+
+#conda init bash
+#source ${SCRIPTPATH_RESOLVED_DIR}/${PRIVATE_ENV_NAME}
+conda activate ${PRIVATE_ENV_NAME}
+"${SCRIPTPATH_RESOLVED}.py"
+conda deactivate

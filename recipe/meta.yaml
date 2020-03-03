@@ -1,0 +1,30 @@
+{% set name = "git-annex-dnanexus" %}
+{% set version = "0.1" %}
+{% set sha256 = "1e7b3b0a6e4b75866c43143a357ae3049a6a9942c934b0c54dd622153ee02411" %}
+
+package:
+  name: "{{ name|lower }}"
+  version: "{{ version }}"
+
+#source:
+#  url: https://github.com/Lykos153/{{ name }}/archive/v{{ version }}.tar.gz
+#  sha256: {{ sha256 }}
+
+build:
+  skip: True  # [not linux]
+  number: 0
+
+requirements:
+  run:
+    - conda
+
+about:
+  home: http://ilya.cc
+  license: GNU General Public v3 (GPLv3)
+  license_family: GPL3
+  license_file: '{{ environ["RECIPE_DIR"] }}/LICENSE'
+  summary: git-annex remote for dnanexus
+
+extra:
+  recipe-maintainers:
+    - notestaff
